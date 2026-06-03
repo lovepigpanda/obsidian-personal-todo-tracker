@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -195,9 +195,123 @@ due: 2026-06-10
     bad_file.unlink()
 
 
+def test_weekly_summary(vault):
+    """Case 8: weekly_summary 生成统计 (V1.0.2)"""
+    print("\n[Test 8] weekly_summary writes alert section")
+    # 多加几个 todo 让统计有内容
+    (vault / "DONE").mkdir(exist_ok=True)
+    cat_template = """---
+type: todo
+title: {title}
+created: 2026-06-01
+status: {status}
+priority: {priority}
+due: {due}
+---
+"""
+    for i, (title, status, prio, due) in enumerate([
+        ("完成的 P1", "DONE", "P1", "2026-06-01"),
+        ("完成的 P2", "DONE", "P2", "2026-06-02"),
+    ]):
+        (vault / status / f"2026-06-0{i+1}-done-{prio}-{status}.md").write_text(
+            cat_template.format(title=title, status=status, priority=prio, due=due),
+            encoding="utf-8",
+        )
+
+    result = run([
+        sys.executable, str(SCRIPTS / "weekly_summary.py"),
+        "--vault", str(vault),
+    ], check=True)
+    print(f"  stdout: {result.stdout.strip()}")
+    # alerts.md 末尾应该有 weekly 段
+    alerts = vault / "alerts.md"
+    assert alerts.exists()
+    content = alerts.read_text(encoding="utf-8")
+    assert "## 📊 本周复盘" in content, f"weekly section missing in alerts.md:\n{content[-500:]}"
+    assert "新建:" in content and "完成:" in content
+    print(f"  ✓ weekly_summary section appended to alerts.md")
+
+
+def test_monthly_summary_skip(vault):
+    """Case 9: monthly_summary 非月末时静默 skip (V1.0.2)"""
+    print("\n[Test 9] monthly_summary skips non-end-of-month")
+    result = run([
+        sys.executable, str(SCRIPTS / "monthly_summary.py"),
+        "--vault", str(vault),
+    ], check=True)
+    assert "⏭️  跳过" in result.stdout, f"expected skip message, got: {result.stdout}"
+    print(f"  ✓ monthly skipped: {result.stdout.strip()[:80]}...")
+
+    # --month 显式指定应该跑
+    result2 = run([
+        sys.executable, str(SCRIPTS / "monthly_summary.py"),
+        "--vault", str(vault),
+        "--month", "2026-05",
+    ], check=True)
+    assert "📅" in result2.stdout
+    print(f"  ✓ monthly --month 2026-05 runs: {result2.stdout.strip()}")
+
+
+def test_push_alerts_dry_run(vault):
+    """Case 10: push_alerts --dry-run 工作 (V1.0.2)"""
+    print("\n[Test 10] push_alerts dry-run works")
+    # 先跑 daily 让 alerts.md 有内容
+    run([sys.executable, str(SCRIPTS / "daily_todo_check.py"), "--vault", str(vault)], check=True)
+
+    result = run([
+        sys.executable, str(SCRIPTS / "push_alerts.py"),
+        "--vault", str(vault),
+        "--dry-run",
+    ], check=True)
+    assert "[DRY-RUN osascript]" in result.stdout
+    print(f"  ✓ push dry-run: {result.stdout.strip()[:80]}...")
+
+
+def test_plist_templates_exist():
+    """Case 11: 3 段 plist 模板都存在且语法 OK (V1.0.2)"""
+    print("\n[Test 11] 3 plist templates exist + valid syntax")
+    plist_dir = REPO_ROOT / "plist"
+    assert plist_dir.exists(), f"plist/ dir missing: {plist_dir}"
+    plists = sorted(plist_dir.glob("com.todo.*.plist"))
+    assert len(plists) == 3, f"expected 3 plists, got {len(plists)}: {plists}"
+    for p in plists:
+        # plutil -lint 校验
+        r = subprocess.run(["plutil", "-lint", str(p)], capture_output=True, text=True)
+        assert r.returncode == 0, f"plist invalid: {p}\n{r.stderr}"
+        print(f"  ✓ {p.name} syntax OK")
+
+
+def test_daily_check_detects_stale_blocked(vault):
+    """Case 12: daily_check 检测 BLOCKED >3 天 (V1.0.2)"""
+    print("\n[Test 12] daily_check detects stale BLOCKED")
+    # 建 14 天前 BLOCKED 的 todo, mtime 改到 14 天前
+    blocked_file = vault / "BLOCKED" / "2026-05-15-old-blocked-P1-BLOCKED.md"
+    blocked_file.write_text("""---
+type: todo
+title: 卡住 19 天
+status: BLOCKED
+priority: P1
+due: 2026-06-01
+---
+""", encoding="utf-8")
+    import os
+    old_time = (datetime.now() - timedelta(days=19)).timestamp()
+    os.utime(blocked_file, (old_time, old_time))
+
+    result = run([
+        sys.executable, str(SCRIPTS / "daily_todo_check.py"),
+        "--vault", str(vault), "--json",
+    ], check=True)
+    data = json.loads(result.stdout)
+    stale = data.get("stale_blocked", [])
+    assert len(stale) >= 1, f"expected stale_blocked, got {stale}"
+    assert any(t["title"] == "卡住 19 天" for t in stale), f"expected title match: {stale}"
+    print(f"  ✓ detected {len(stale)} stale BLOCKED (卡住 19 天)")
+
+
 def main():
     print("=" * 60)
-    print("  obsidian-personal-todo-tracker V1.0 端到端测试")
+    print("  obsidian-personal-todo-tracker V1.0.2 端到端测试")
     print("=" * 60)
 
     vault = setup_vault()
@@ -209,6 +323,12 @@ def main():
         test_validate_active_dir(vault)
         test_daily_check_writes_alerts(vault)
         test_validate_misplaced_file(vault)
+        # V1.0.2 新增 5 个 case
+        test_weekly_summary(vault)
+        test_monthly_summary_skip(vault)
+        test_push_alerts_dry_run(vault)
+        test_plist_templates_exist()
+        test_daily_check_detects_stale_blocked(vault)
     finally:
         # 清理 learning.json (避免污染真实环境)
         learning = Path.home() / ".obsidian-todo" / "learning.json"
@@ -220,7 +340,7 @@ def main():
         print(f"\n✓ cleaned up: {vault}")
 
     print("\n" + "=" * 60)
-    print("  ✅ 所有 7 个端到端测试通过")
+    print("  ✅ 所有 12 个端到端测试通过 (V1.0 = 7 + V1.0.2 = 5)")
     print("=" * 60)
     return 0
 

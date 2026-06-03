@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.todo.monthly-summary</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/wuhaojuan/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/monthly_summary.py</string>
+        <string>--vault</string>
+        <string>/Users/wuhaojuan/Obsidian/todo</string>
+    </array>
+
+    <!--
+      macOS launchd 的 StartCalendarInterval 用单个 dict 时不支持 "last day of month".
+      Workaround: 用 28 号 (所有月份都至少有 28 天) + 在脚本里判断 "今天是不是本月最后一天".
+      或者: 用 4 个分开的 dict (28/29/30/31 号各一次), 脚本里判断 "是不是今天 = 月末".
+      V1.0.2 简化: 28 号跑, 脚本内自己 skip 还没到月末的情况 (date.today() + timedelta >= next_month_first).
+    -->
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key>
+        <integer>28</integer>
+        <key>Hour</key>
+        <integer>21</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/todo-monthly-summary.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/todo-monthly-summary.err.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/wuhaojuan/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track</string>
+</dict>
+</plist>

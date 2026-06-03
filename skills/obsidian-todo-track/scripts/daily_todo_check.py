@@ -35,7 +35,7 @@ import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # 让脚本可独立运行, 也可被 import
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
@@ -76,6 +76,8 @@ PRIORITY_WEIGHT = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 def scan_vault(vault: Path, today: date) -> List[Dict[str, Any]]:
     """
     扫 vault/ACTIVE/ 下所有 todo, 返回排序后的列表.
+
+    V1.0.2 增强: 同时扫 BLOCKED/ 找超 3 天的 (stale blocked)
 
     每项: {path, todo, severity, bucket, days}
     """
@@ -127,6 +129,35 @@ def scan_vault(vault: Path, today: date) -> List[Dict[str, Any]]:
     return results
 
 
+def scan_stale_blocked(vault: Path, today: date, min_days: int = 3) -> List[Dict[str, Any]]:
+    """
+    扫 BLOCKED/ 找超 min_days 天的 (mtime 距今 >= min_days).
+
+    V1.0.2 主动能力: Agent 拿到这个列表会主动问"X 这个 BLOCKED N 天了, 怎么办?"
+    """
+    results = []
+    blocked_dir = vault / "BLOCKED"
+    if not blocked_dir.exists():
+        return results
+    for md_file in sorted(blocked_dir.glob("*.md")):
+        todo, _ = parse_todo_file(md_file)
+        if todo is None:
+            continue
+        mtime = datetime.fromtimestamp(md_file.stat().st_mtime)
+        days_blocked = (today - mtime.date()).days
+        if days_blocked >= min_days:
+            results.append({
+                "path": md_file,
+                "filename": md_file.name,
+                "title": todo.get("title", md_file.stem),
+                "priority": todo.get("priority", "P3"),
+                "due": todo["due"].isoformat() if todo["due"] else None,
+                "days_blocked": days_blocked,
+            })
+    results.sort(key=lambda r: -r["days_blocked"])
+    return results
+
+
 # ============================================================
 # 渲染 alerts.md
 # ============================================================
@@ -149,9 +180,18 @@ BUCKET_LABEL = {
 }
 
 
-def render_alerts_md(results: List[Dict[str, Any]], today: date) -> str:
-    """渲染 ~/Obsidian/todo/alerts.md."""
+def render_alerts_md(
+    results: List[Dict[str, Any]],
+    today: date,
+    stale_blocked: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """渲染 ~/Obsidian/todo/alerts.md.
+
+    V1.0.2 增强: 加 stale_blocked 段 (BLOCKED > 3 天的, Agent 主动问)
+    """
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if stale_blocked is None:
+        stale_blocked = []
 
     # 统计
     count_overdue = sum(1 for r in results if r["bucket"] == "OVERDUE")
@@ -232,6 +272,18 @@ def render_alerts_md(results: List[Dict[str, Any]], today: date) -> str:
             lines.append(f"- {r['filename']}: {r.get('parse_error', [])}")
         lines.append("")
 
+    if stale_blocked:
+        lines.append("## 🚨 BLOCKED 超期 (Agent 主动问: 这个怎么办?)")
+        lines.append("")
+        for t in stale_blocked:
+            lines.append(
+                f"- {t['priority']} {t['title']} "
+                f"(BLOCKED {t['days_blocked']} 天, due {t['due'] or '?'})"
+            )
+        lines.append("")
+        lines.append("> 建议: 跟 Agent 商量, 该继续/延期/取消/拆分")
+        lines.append("")
+
     if not results:
         lines.append("🎉 当前 ACTIVE/ 目录为空, 无 todo.")
         lines.append("")
@@ -275,17 +327,20 @@ def main() -> int:
 
     today = date.today()
     results = scan_vault(vault, today)
+    stale_blocked = scan_stale_blocked(vault, today)
 
     if args.json:
         # JSON 不写文件
+        # 去掉 Path 对象 (不序列化)
+        def _clean(r):
+            return {k: (str(v) if hasattr(v, "__fspath__") else v) for k, v in r.items() if k != "path"}
         output = {
             "date": today.isoformat(),
             "vault": str(vault),
             "total": len(results),
-            "results": [
-                {k: v for k, v in r.items() if k != "path"}
-                for r in results
-            ],
+            "stale_blocked_count": len(stale_blocked),
+            "results": [_clean(r) for r in results],
+            "stale_blocked": [_clean(t) for t in stale_blocked],
         }
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
@@ -296,10 +351,15 @@ def main() -> int:
             severity = SEVERITY_EMOJI.get(r["severity"], "•")
             days_str = f"{r['days']}d" if r["days"] is not None else "?"
             print(f"  {severity} {r['priority']} {r['title']} ({days_str})")
+        if stale_blocked:
+            print()
+            print("  🚨 BLOCKED 超期:")
+            for t in stale_blocked:
+                print(f"    - {t['priority']} {t['title']} ({t['days_blocked']}d)")
         return 0
 
     # 写 alerts.md
-    content = render_alerts_md(results, today)
+    content = render_alerts_md(results, today, stale_blocked=stale_blocked)
     alerts_path = vault / "alerts.md"
 
     # 原子写

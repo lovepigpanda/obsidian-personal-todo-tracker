@@ -43,6 +43,11 @@ while [[ $# -gt 0 ]]; do
             FORCE=1
             shift
             ;;
+        --install-plist)
+            INSTALL_PLIST=1
+            export INSTALL_PLIST
+            shift
+            ;;
         --vault)
             VAULT="$2"
             shift 2
@@ -200,7 +205,40 @@ if [[ $cp_exit -eq 2 ]]; then
 fi
 echo ""
 
-# 4. 总结
+# 4. (可选) 装 launchd plist 启用定时主动
+if [[ $DRY_RUN -eq 1 ]]; then
+    log "=== 步骤 3: 装 launchd plist (DRY-RUN, 不真装) ==="
+    if [[ -d "$REPO_ROOT/plist" ]]; then
+        for plist in "$REPO_ROOT/plist"/*.plist; do
+            plist_name=$(basename "$plist")
+            log "将 cp: $plist -> ~/Library/LaunchAgents/$plist_name"
+            log "       然后 launchctl load ~/Library/LaunchAgents/$plist_name"
+        done
+    fi
+    echo ""
+    log "(跳过 plist 装, 跑 'bash $0 --install-plist' 真装)"
+elif [[ "${INSTALL_PLIST:-0}" -eq 1 ]]; then
+    log "=== 步骤 3: 装 launchd plist ==="
+    if [[ ! -d "$REPO_ROOT/plist" ]]; then
+        warn "plist 目录不存在: $REPO_ROOT/plist"
+    else
+        mkdir -p ~/Library/LaunchAgents
+        for plist in "$REPO_ROOT/plist"/*.plist; do
+            plist_name=$(basename "$plist")
+            dst=~/Library/LaunchAgents/$plist_name
+            cp "$plist" "$dst"
+            log "✓ cp: $plist -> $dst"
+            if launchctl load "$dst" 2>&1; then
+                log "✓ launchctl load: $dst"
+            else
+                warn "launchctl load 失败 (可能已加载), 跑 'launchctl unload $dst' 后重试"
+            fi
+        done
+    fi
+    echo ""
+fi
+
+# 5. 总结
 echo "=========================================="
 if [[ $DRY_RUN -eq 1 ]]; then
     echo "  DRY-RUN 完成 (上面是预期行为, 实际未改任何文件)"
@@ -213,6 +251,11 @@ echo "下一步:"
 echo "  1. 编辑 $VAULT/todo-config.md (Agent Onboarding 时生成)"
 echo "  2. 跟 Agent 说 '开始用 todo' 触发 Onboarding 7 步"
 echo "  3. 跟 Agent 说 '建个 todo 提醒我 X' 创建第一个 todo"
+echo ""
+echo "启用定时主动 (V1.0.2 新):"
+echo "  bash $REPO_ROOT/install.sh --install-plist   # 装 3 段 plist + launchctl load"
+echo "  launchctl list | grep com.todo.             # 验证 3 段都跑起来"
+echo "  tail -f /tmp/todo-daily-integrity.log       # 看每天 18:00 跑 daily_check"
 echo ""
 echo "验证安装:"
 echo "  python3 $REPO_ROOT/scripts/validate_todo.py --help"

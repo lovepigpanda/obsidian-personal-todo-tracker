@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.todo.weekly-summary</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/wuhaojuan/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/weekly_summary.py</string>
+        <string>--vault</string>
+        <string>/Users/wuhaojuan/Obsidian/todo</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>20</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/todo-weekly-summary.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/todo-weekly-summary.err.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/wuhaojuan/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track</string>
+</dict>
+</plist>

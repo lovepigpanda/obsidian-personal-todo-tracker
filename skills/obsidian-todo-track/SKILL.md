@@ -18,11 +18,13 @@ description: >
   **必须**立即执行「Onboarding 7 步」，不能直接进入 todo 流程。
   未完成 Onboarding = 未真正启用本技能。
 
-  📌 定位：Agent 不是计算器，是**主动管家**。
-  - 主动跑 daily_todo_check.py，不等用户问"我今天有什么"
+  📌 定位：Agent 不是计算器，是**主动管家** (V1.0.2 已完整交付)。
+  - 主动跑 daily_todo_check.py (每日 18:00 launchd)
   - 主动给 due 临近的 todo 发提醒
   - 主动问"这个 todo 要不要 snooze 到下周"
-  - 主动问"BLOCKED 状态超过 3 天的 todo 怎么办"
+  - 主动问"BLOCKED 状态超过 3 天的 todo 怎么办" (V1.0.2 新)
+  - 每周日 20:00 自动跑 weekly_summary, 月末自动跑 monthly_summary
+  - 主动推送到 macOS 桌面通知 (V1.0.2 新; 飞书/微信 webhook 配 ~/.obsidian-todo/push_config.json)
 triggers:
   # === 初始化触发词（首次使用）===
   - 装好了
@@ -51,14 +53,17 @@ triggers:
   - block
   - task
   - reminder
-version: V1.0
+version: V1.0.2
 # V1.0 = 最小可落地 (M1)
-#   交付: SKILL.md + install.sh + 2 个 stdlib 脚本 (validate_todo / todo_create)
+#   交付: SKILL.md + install.sh + 3 个 stdlib 脚本 (validate_todo / todo_create / daily_todo_check)
 #         + 1 个每日巡检 (daily_todo_check) + 1 个默认优先级配置 (default_priorities.yaml)
-#   故意不做: 6 段 plist 模板 / weekly / monthly / 多语言 en / aweskill 同步 / Dataview
-#   后续: V1.1 plist 模板真交付 (学 finance track V1.3.4 教训);
-#         V1.2 weekly_summary.py; V1.3 monthly_summary.py; V1.4 en 翻译;
-#         V1.5 aweskill 同步; V1.6 Dataview 仪表盘
+# V1.0.1 = 仓库重构 (move all into skills/obsidian-todo-track/, aweskill install 自动完整带)
+# V1.0.2 = 主动能力全面交付 (跟 finance track V1.3.4 齐平)
+#   新增: 3 个脚本 (weekly_summary / monthly_summary / push_alerts)
+#         daily_todo_check 增强 (BLOCKED >3 天 主动问)
+#         3 段 launchd plist 模板 (daily 18:00 / weekly 周日 20:00 / monthly 月末 21:00)
+#         install.sh --install-plist 真装 (学 finance V1.3.4 教训, 不只问要不要)
+# 故意不做: en 翻译 (V1.4) / Dataview 仪表盘 (V1.6) / project (multi-step) 支持 (明确不做)
 status: ACTIVE
 tags: [todo, obsidian, agent, productivity, task-tracking]
 author: lovepigpanda
@@ -146,16 +151,16 @@ obsidian-personal-todo-tracker             ~/Obsidian/todo/
 | 定制 | 可以提交 PR 优化通用规则 | 用户自己的 todo 命名、备注 |
 | 风险 | 误操作不会影响 todo 数据 | todo 数据完全隔离 |
 
-### V1.0 范围说明
+### V1.0.2 范围说明 (跟 finance track V1.3.4 齐平)
 
-| 类别 | V1.0 真实交付 | 故意不做（V1.x 后续） |
-|------|---------------|---------------------|
-| 脚本 | validate_todo / todo_create / daily_todo_check (3 个) | weekly_summary / monthly_summary / snooze_helper / done_helper / due_reminder / 等 |
-| 文档 | zh SKILL.md + zh README.md | en SKILL / en README |
+| 类别 | V1.0.2 真实交付 | 故意不做（V1.x 后续） |
+|------|------------------|---------------------|
+| 脚本 | validate_todo / todo_create / daily_todo_check / weekly_summary / monthly_summary / push_alerts (6 个) | snooze_helper / done_helper / 等 |
+| 文档 | zh SKILL.md + zh README.md | en SKILL / en README (V1.4) |
 | 模板 | 文件名规范（脚本生成） | 手写 .md 模板 |
-| 安装 | install.sh 一键 cp + dry-run | aweskill 同步（V1.5） |
-| 定时 | 无（Agent 会话内主动跑） | 6 段 plist 模板（V1.1） |
-| 仪表盘 | alerts.md（脚本写）+ Agent 主动推送 | Dataview 仪表盘（V1.6） |
+| 安装 | install.sh 一键 cp + dry-run + --install-plist | aweskill 自动（V1.5） |
+| 定时 | **3 段 plist 真交付** (daily 18:00 / weekly 周日 20:00 / monthly 月末 21:00) | snooze/done/block/cancel 显式 helper (V1.1) |
+| 仪表盘 | alerts.md (脚本写) + macOS 桌面通知 + 可选 webhook 推送 | Dataview 仪表盘（V1.5） |
 
 ---
 
@@ -215,19 +220,29 @@ Agent 推送 (Agent 自带通道):
 3. **英文关键词**：todo / task / reminder / snooze / block
 4. **意图判断**：用户描述了一件要做的事，不管用什么词
 
-## 🎯 Agent 定位: 主动管家, 不是被动工具
+## 🎯 Agent 定位: 主动管家, 不是被动工具 (V1.0.2 已完整交付)
 
-| 被动 ❌ | 主动 ✅ |
-|---------|---------|
+| 被动 ❌ | 主动 ✅ (V1.0.2 真实交付) |
+|---------|---------------------------|
 | 用户说"建个 todo"才工作 | 会话开始就主动跑 daily_todo_check 拿今日 todo |
 | 等用户问"我今天做什么" | 主动说"你今天有 3 项 P1, 1 项已逾期" |
-| 用户配 cron / launchd | **V1.1 Agent 主动问**"要不要我帮你配每日定时?" |
-| 用户配 webhook 通知 | **Agent 用自己已有的通道**主动推送 |
+| 用户配 cron / launchd | **Agent 真交付 3 段 plist** (daily 18:00 / weekly 周日 20:00 / monthly 月末), `bash install.sh --install-plist` 一键装 |
+| 用户配 webhook 通知 | **Agent 主动推 macOS 桌面通知** (V1.0.2 真交付); 飞书/微信 webhook 配 `~/.obsidian-todo/push_config.json` |
 | 等用户发现过期 todo | 提前发现并告警 |
+| 等用户发现 BLOCKED 超 3 天 | **V1.0.2 新** daily_check 自动扫, 主动问"这个怎么办?" |
 
 **判断标准**: 如果一件事**用户必须主动做**才能享受, 那就是 Agent 失职。
 
-**⚠️ V1.0 已知承诺未交付**: 6 段 plist 模板在 V1.1 真交付（学 finance track V1.1.4→V1.3.3 教训——4 个版本承诺没真配过）。V1.0 文档明确说"等用户问"才配，**不假装已经配好**。
+**✅ V1.0.2 已交付的"主动"** (学 finance V1.3.4):
+- 3 段 plist 模板 (不再"等用户问", install.sh --install-plist 真装)
+- daily_check 增强 (BLOCKED >3 天 主动问)
+- weekly_summary / monthly_summary 脚本 + plist 定时
+- push_alerts.py 推 macOS 桌面通知 (webhook 配 push_config.json)
+
+**V1.0.2 仍不做的**:
+- 飞书/微信 webhook 推送 (需要用户配 push_config.json, 不是 skill 责任)
+- Dataview 仪表盘 (V1.6 计划)
+- en 翻译 (V1.4 计划)
 
 ---
 
@@ -241,7 +256,7 @@ Agent 推送 (Agent 自带通道):
 2. **验证/clone 仓库** — 检查 `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/` 存在；不存在就 `git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git`（V1.0 必须仓库方式，不走 aweskill）
 3. **验证必需文件** — 检查 `todo-config.md` / `alerts.md` / `ACTIVE|DONE|BLOCKED|SNOOZED|CANCELED/` 5 个目录在，缺则 Agent 主动帮创建
 4. **引导填 todo-config.md** — 问"你想怎么分工作/生活"，帮写哨兵文件
-5. **⚠️ V1.0 不配 plist**（V1.1 真配）— 明确告诉用户"现在你得手动跑 daily_todo_check.py，V1.1 我会真交付 6 段 plist 模板"
+5. **V1.0.2 真配 plist** — Agent 主动 `bash $REPO_ROOT/install.sh --install-plist` (3 段 plist 装到 ~/Library/LaunchAgents/ + launchctl load), 不只问"要不要"
 6. **配置通知偏好** — 主动问"每日巡检结果我用我自己的通道 (飞书/微信) 发给你，还是只写 alerts.md 你自己看？"
 7. **试一个 todo** — 验证整个流程通：Agent 调 `todo_create.py` → 自动调 `validate_todo.py` → 写到 ACTIVE/
 
@@ -472,27 +487,37 @@ python3 scripts/daily_todo_check.py
 
 ---
 
-## V1.0 脚本清单
+## V1.0.2 脚本清单 (跟 finance V1.3.4 齐平)
 
-**当前共有 3 个 stdlib 脚本** (V1.0 真实交付)：
+**当前共有 6 个 stdlib 脚本** (V1.0.2 真实交付)：
 
 | # | 脚本 | 用途 | 必跑时机 |
 |---|------|------|----------|
 | 1 | `validate_todo.py` | 单笔校验 | todo_create / done / snooze 后立即 |
 | 2 | `todo_create.py` | 创建入口（5 层默认 + ask_on_2nd） | Agent 解析完用户输入 |
-| 3 | `daily_todo_check.py` | 每日巡检（due 临近/逾期 → alerts.md） | Agent 会话开始 / 用户问 "我今天做什么" |
+| 3 | `daily_todo_check.py` | 每日巡检（due 临近/逾期 + BLOCKED 超 3 天 → alerts.md） | launchd 每日 18:00 / Agent 会话开始 |
+| 4 | `weekly_summary.py` | 本周复盘（新建/完成/净增/状态分布/priority 分布） | launchd 每周日 20:00 |
+| 5 | `monthly_summary.py` | 月度报告（完成率/平均完成时间/滞销清单） | launchd 每月 28 号 21:00（脚本内判月末, 不是月末静默 skip） |
+| 6 | `push_alerts.py` | 推送 alerts 摘要到 macOS 桌面通知（wecom/feishu/dingtalk webhook 配 `~/.obsidian-todo/push_config.json`） | daily/weekly/monthly 跑完后 Agent 调一次 |
 
-**V1.x 后续要做的脚本**（V1.0 不做，故意列出让用户有 roadmap 预期）：
+**3 段 plist 模板** (`plist/com.todo.*.plist`)：
 
-| 计划版本 | 脚本 | 备注 |
-|---------|------|------|
+| Label | 触发 | 跑 |
+|-------|------|-----|
+| `com.todo.daily-integrity` | 每日 18:00 | `daily_todo_check.py` |
+| `com.todo.weekly-summary` | 每周日 20:00 | `weekly_summary.py` |
+| `com.todo.monthly-summary` | 每月 28 号 21:00 | `monthly_summary.py` |
+
+**安装方式**: `bash $REPO_ROOT/install.sh --install-plist` (真 cp + launchctl load, 不只问"要不要配", 学 finance V1.3.4 教训)
+
+**V1.x 后续要做的脚本** (V1.0.2 不做, 故意列出让用户有 roadmap 预期)：
+
+| 计划版本 | 脚本/能力 | 备注 |
+|---------|-----------|------|
 | V1.1 | snooze_helper.py / done_helper.py | done / snooze / block / cancel 走显式脚本而非 Agent 改文件 |
-| V1.1 | 6 段 plist 模板（学 finance track V1.3.4） | 真交付，不只问"要不要配" |
-| V1.2 | weekly_summary.py | 周末复盘 |
-| V1.3 | monthly_summary.py | 月末自检 |
-| V1.4 | en 翻译 | 双语 |
-| V1.5 | aweskill 同步 | skills/ 投影到中心 store |
-| V1.6 | Dataview 仪表盘模板 | 用户在 Obsidian 里看 |
+| V1.1 | snooze / done / block / cancel Agent 显式 helper | V1.0.2 暂时 Agent 直接改 status + mv 文件 |
+| V1.4 | en 翻译 | 双语 (学 finance V1.3.2) |
+| V1.5 | Dataview 仪表盘模板 | 用户在 Obsidian 里看 |
 
 ---
 
@@ -525,7 +550,7 @@ python3 scripts/daily_todo_check.py
 
 ---
 
-## 首次安装说明
+## 首次安装说明 (V1.0.2)
 
 ```bash
 # 1. 克隆项目到本地
@@ -534,11 +559,24 @@ git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git ~/P
 # 2. 在 Obsidian vault 中创建 todo 目录
 mkdir -p ~/Obsidian/todo/{ACTIVE,DONE,BLOCKED,SNOOZED,CANCELED}
 
-# 3. 跑 install.sh (V1.0 dry-run 模式先验证)
+# 3. 跑 install.sh (dry-run 模式先验证)
 bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh --dry-run
 bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh  # 真装
 
-# 4. AI Agent Onboarding
+# 4. (V1.0.2 新) 启用定时主动 — 装 3 段 launchd plist
+bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh --install-plist
+launchctl list | grep com.todo.   # 验证 3 段都跑起来
+
+# 5. (可选) 配 push 通道 — 飞书/微信 webhook
+mkdir -p ~/.obsidian-todo
+cat > ~/.obsidian-todo/push_config.json <<'EOF'
+{
+  "wecom": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY",
+  "feishu": "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN"
+}
+EOF
+
+# 6. AI Agent Onboarding
 # 用户对 Agent 说"开始用 todo" / "装好了"
 # Agent 自动跑 7 步 Onboarding, 生成 todo-config.md
 ```
@@ -547,6 +585,6 @@ bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install
 
 ---
 
-> Skill: obsidian-todo-track | Version: V1.0 (最小可落地) | For AI Agent use
+> Skill: obsidian-todo-track | Version: V1.0.2 (主动能力全面交付, 跟 finance V1.3.4 齐平) | For AI Agent use
 > Project: https://github.com/lovepigpanda/obsidian-personal-todo-tracker
 > 后续 V1.1+ roadmap 见「V1.x 后续要做的脚本」表格
