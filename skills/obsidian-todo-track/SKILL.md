@@ -10,7 +10,7 @@ description: >
   .md 文件，并写每日 alerts.md 提醒。
 
   ⚠️ 技能代码与 todo 数据完全分离，这是本项目的核心设计原则：
-  - 技能代码在 ~/Project/obsidian-personal-todo-tracker/（Git 同步）
+  - 技能代码在 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/（Git 同步）
   - 用户 todo 数据在 ~/Obsidian/todo/（私有，不上传）
 
   🚨 首次加载强制入口：当用户说"装好了"/"开始用"/"设置 todo"/
@@ -186,7 +186,7 @@ obsidian-personal-todo-tracker             ~/Obsidian/todo/
        ↓
 AI Agent 读取 ~/Obsidian/todo/todo-config.md (user preferences)
        ↓
-AI Agent 读取 ~/Project/obsidian-personal-todo-tracker/config/default_priorities.yaml
+AI Agent 读取 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/config/default_priorities.yaml
        ↓
 解析字段：type / title / due / priority / project / status / note
        ↓
@@ -238,7 +238,7 @@ Agent 推送 (Agent 自带通道):
 **不要默默开始建 todo**。先做 7 步配置：
 
 1. **确认 vault 目录** — 默认 `~/Obsidian/todo`，确认或改
-2. **验证/clone 仓库** — 检查 `~/Project/obsidian-personal-todo-tracker/scripts/` 存在；不存在就 `git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git`（V1.0 必须仓库方式，不走 aweskill）
+2. **验证/clone 仓库** — 检查 `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/` 存在；不存在就 `git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git`（V1.0 必须仓库方式，不走 aweskill）
 3. **验证必需文件** — 检查 `todo-config.md` / `alerts.md` / `ACTIVE|DONE|BLOCKED|SNOOZED|CANCELED/` 5 个目录在，缺则 Agent 主动帮创建
 4. **引导填 todo-config.md** — 问"你想怎么分工作/生活"，帮写哨兵文件
 5. **⚠️ V1.0 不配 plist**（V1.1 真配）— 明确告诉用户"现在你得手动跑 daily_todo_check.py，V1.1 我会真交付 6 段 plist 模板"
@@ -512,12 +512,12 @@ python3 scripts/daily_todo_check.py
 
 | 文件 | 路径 |
 |------|------|
-| 本 SKILL.md | `~/Project/obsidian-personal-todo-tracker/zh/SKILL.md` |
-| 详细 AGENTS 工作流 | `~/Project/obsidian-personal-todo-tracker/zh/AGENTS/` (V1.0 占位) |
-| todo 模板 | `~/Project/obsidian-personal-todo-tracker/zh/Templates/` (V1.0 占位) |
-| 脚本 | `~/Project/obsidian-personal-todo-tracker/scripts/` |
-| 默认优先级 | `~/Project/obsidian-personal-todo-tracker/config/default_priorities.yaml` |
-| 安装脚本 | `~/Project/obsidian-personal-todo-tracker/install.sh` |
+| 本 SKILL.md | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/SKILL.md` |
+| 详细 AGENTS 工作流 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/AGENTS/` (V1.0 占位) |
+| todo 模板 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/Templates/` (V1.0 占位) |
+| 脚本 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/` |
+| 默认优先级 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/config/default_priorities.yaml` |
+| 安装脚本 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh` |
 | 用户配置哨兵 | `~/Obsidian/todo/todo-config.md` |
 | **todo 数据** | `~/Obsidian/todo/{ACTIVE,DONE,BLOCKED,SNOOZED,CANCELED}/` |
 | alerts 输出 | `~/Obsidian/todo/alerts.md` |
@@ -535,8 +535,8 @@ git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git ~/P
 mkdir -p ~/Obsidian/todo/{ACTIVE,DONE,BLOCKED,SNOOZED,CANCELED}
 
 # 3. 跑 install.sh (V1.0 dry-run 模式先验证)
-bash ~/Project/obsidian-personal-todo-tracker/install.sh --dry-run
-bash ~/Project/obsidian-personal-todo-tracker/install.sh  # 真装
+bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh --dry-run
+bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh  # 真装
 
 # 4. AI Agent Onboarding
 # 用户对 Agent 说"开始用 todo" / "装好了"
