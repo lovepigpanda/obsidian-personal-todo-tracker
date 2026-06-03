@@ -256,7 +256,7 @@ Agent 推送 (Agent 自带通道):
 2. **验证/clone 仓库** — 检查 `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/` 存在；不存在就 `git clone https://github.com/lovepigpanda/obsidian-personal-todo-tracker.git`（V1.0 必须仓库方式，不走 aweskill）
 3. **验证必需文件** — 检查 `todo-config.md` / `alerts.md` / `ACTIVE|DONE|BLOCKED|SNOOZED|CANCELED/` 5 个目录在，缺则 Agent 主动帮创建
 4. **引导填 todo-config.md** — 问"你想怎么分工作/生活"，帮写哨兵文件
-5. **V1.0.2 真配 plist** — Agent 主动 `bash $REPO_ROOT/install.sh --install-plist` (3 段 plist 装到 ~/Library/LaunchAgents/ + launchctl load), 不只问"要不要"
+5. **V1.0.2 真配 plist** — Agent 主动 `bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh --install-plist` (3 段 plist 装到 ~/Library/LaunchAgents/ + launchctl load), 不只问"要不要"
 6. **配置通知偏好** — 主动问"每日巡检结果我用我自己的通道 (飞书/微信) 发给你，还是只写 alerts.md 你自己看？"
 7. **试一个 todo** — 验证整个流程通：Agent 调 `todo_create.py` → 自动调 `validate_todo.py` → 写到 ACTIVE/
 
@@ -332,13 +332,15 @@ default_remind_days: 3         # 距 due ≤ N 天 WARN
 
 **Agent 调用**:
 ```bash
-python3 scripts/todo_create.py \
+python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/todo_create.py \
   --vault ~/Obsidian/todo \
   --type create \
   --title "续签劳动合同" \
   --due 2026-06-15 \
   --note "合同 6/30 到期"
 ```
+
+(完整路径, 不依赖 cwd; 用相对路径 `scripts/todo_create.py` 时必须先 `cd ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track`)
 
 返回 JSON:
 ```json
@@ -409,7 +411,7 @@ note: "合同 6/30 到期，提前 2 周走流程"
 `todo_create.py` 写完文件后**立即**调 `validate_todo.py`：
 
 ```bash
-python3 scripts/validate_todo.py ~/Obsidian/todo/ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md
+python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/validate_todo.py ~/Obsidian/todo/ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md
 ```
 
 退出码：
@@ -423,7 +425,7 @@ python3 scripts/validate_todo.py ~/Obsidian/todo/ACTIVE/2026-06-15-renew-contrac
 
 Agent **会话开始时主动跑**：
 ```bash
-python3 scripts/daily_todo_check.py
+python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/daily_todo_check.py
 ```
 
 读 `~/Obsidian/todo/alerts.md`，决定要不要推给用户：
@@ -508,7 +510,7 @@ python3 scripts/daily_todo_check.py
 | `com.todo.weekly-summary` | 每周日 20:00 | `weekly_summary.py` |
 | `com.todo.monthly-summary` | 每月 28 号 21:00 | `monthly_summary.py` |
 
-**安装方式**: `bash $REPO_ROOT/install.sh --install-plist` (真 cp + launchctl load, 不只问"要不要配", 学 finance V1.3.4 教训)
+**安装方式**: `bash ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh --install-plist` (真 cp + launchctl load, 不只问"要不要配", 学 finance V1.3.4 教训)
 
 **V1.x 后续要做的脚本** (V1.0.2 不做, 故意列出让用户有 roadmap 预期)：
 
@@ -537,9 +539,9 @@ python3 scripts/daily_todo_check.py
 
 | 文件 | 路径 |
 |------|------|
-| 本 SKILL.md | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/SKILL.md` |
-| 详细 AGENTS 工作流 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/AGENTS/` (V1.0 占位) |
-| todo 模板 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/zh/Templates/` (V1.0 占位) |
+| 本 SKILL.md | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/SKILL.md` (V1.0.1 重构后从 `zh/SKILL.md` 移到 skill 根) |
+| 详细 AGENTS 工作流 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/SKILL.md` § AGENTS 工作流 (V1.0 单文件设计) |
+| todo 模板 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/SKILL.md` § 模板 (V1.0 单文件设计) |
 | 脚本 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/` |
 | 默认优先级 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/config/default_priorities.yaml` |
 | 安装脚本 | `~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/install.sh` |

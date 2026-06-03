@@ -309,9 +309,83 @@ due: 2026-06-01
     print(f"  ✓ detected {len(stale)} stale BLOCKED (卡住 19 天)")
 
 
+# V1.0.3 新增 4 个 case ----------------------------------------------------
+def test_todo_create_output_text(vault):
+    """--output text 给人类可读 (不破坏 JSON 默认)"""
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    result = run([
+        sys.executable, str(SCRIPTS / "todo_create.py"),
+        "--vault", str(vault), "--type", "create",
+        "--title", "测试 V1.0.3 text 模式",
+        "--due", tomorrow,
+        "--output", "text",
+    ], check=True)
+    # text 模式: 人类可读, 不是 JSON
+    assert "✅" in result.stdout, f"text mode should have ✅: {result.stdout!r}"
+    assert "priority:" in result.stdout, f"text mode should show priority: {result.stdout!r}"
+    assert "validate:" in result.stdout, f"text mode should show validate exit: {result.stdout!r}"
+    # 重要: 不应是 JSON (没开括号打头)
+    assert not result.stdout.lstrip().startswith("{"), \
+        f"text mode should NOT start with JSON: {result.stdout!r}"
+    print(f"  ✓ --output text: 人类可读格式正确")
+
+
+def test_todo_create_output_json_explicit(vault):
+    """--output json 显式 flag (跟默认行为一致)"""
+    tomorrow = (date.today() + timedelta(days=2)).isoformat()
+    result = run([
+        sys.executable, str(SCRIPTS / "todo_create.py"),
+        "--vault", str(vault), "--type", "create",
+        "--title", "测试 V1.0.3 json 显式",
+        "--due", tomorrow,
+        "--output", "json",
+    ], check=True)
+    # json 模式: 可被 json.loads
+    data = json.loads(result.stdout)
+    assert data.get("ok") is True, f"json should have ok=True: {data}"
+    assert data.get("type") == "ok"
+    assert "file_path" in data
+    assert "priority" in data
+    print(f"  ✓ --output json: 显式 flag 工作 (跟默认一致)")
+
+
+def test_todo_create_output_default_is_json(vault):
+    """无 --output flag 时默认 json (V1.0.3 不破坏旧行为)"""
+    tomorrow = (date.today() + timedelta(days=3)).isoformat()
+    result = run([
+        sys.executable, str(SCRIPTS / "todo_create.py"),
+        "--vault", str(vault), "--type", "create",
+        "--title", "测试 V1.0.3 默认",
+        "--due", tomorrow,
+    ], check=True)
+    data = json.loads(result.stdout)  # 默认必须能被 json.loads
+    assert data.get("ok") is True
+    print(f"  ✓ 默认行为 (无 --output) 仍是 JSON, 不破坏 V1.0 调用方")
+
+
+def test_install_sh_runs_from_skill_dir(vault):
+    """install.sh 在 skill 目录跑 (aweskill 装完后实际场景)"""
+    # 找 install.sh 所在目录
+    install_sh = REPO_ROOT / "install.sh"
+    assert install_sh.exists(), f"install.sh 缺失: {install_sh}"
+    # 跑 dry-run (不真改 vault)
+    result = subprocess.run(
+        ["bash", str(install_sh), "--dry-run", "--vault", str(vault)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, \
+        f"install.sh dry-run from skill dir failed (exit {result.returncode}): {result.stderr}"
+    assert "Skill dir:" in result.stdout, \
+        f"install.sh 应输出 Skill dir 字段: {result.stdout[:500]}"
+    # V1.0.3 关键: 不应说"请确认 install.sh 在仓库根目录跑"
+    assert "请确认 install.sh 在仓库根目录跑" not in result.stdout, \
+        "V1.0.3 修复: 不应再显示过时的 V1.0 错误文案"
+    print(f"  ✓ install.sh 在 skill 目录跑 (aweskill 装完后场景) 通过")
+
+
 def main():
     print("=" * 60)
-    print("  obsidian-personal-todo-tracker V1.0.2 端到端测试")
+    print("  obsidian-personal-todo-tracker V1.0.3 端到端测试")
     print("=" * 60)
 
     vault = setup_vault()
@@ -329,6 +403,11 @@ def main():
         test_push_alerts_dry_run(vault)
         test_plist_templates_exist()
         test_daily_check_detects_stale_blocked(vault)
+        # V1.0.3 新增 4 个 case
+        test_todo_create_output_text(vault)
+        test_todo_create_output_json_explicit(vault)
+        test_todo_create_output_default_is_json(vault)
+        test_install_sh_runs_from_skill_dir(vault)
     finally:
         # 清理 learning.json (避免污染真实环境)
         learning = Path.home() / ".obsidian-todo" / "learning.json"
@@ -340,7 +419,7 @@ def main():
         print(f"\n✓ cleaned up: {vault}")
 
     print("\n" + "=" * 60)
-    print("  ✅ 所有 12 个端到端测试通过 (V1.0 = 7 + V1.0.2 = 5)")
+    print("  ✅ 所有 16 个端到端测试通过 (V1.0 = 7 + V1.0.2 = 5 + V1.0.3 = 4)")
     print("=" * 60)
     return 0
 

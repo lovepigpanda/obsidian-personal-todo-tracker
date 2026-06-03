@@ -467,6 +467,10 @@ def main() -> int:
         "--no-validate", action="store_true",
         help="V1.0 默认必跑 validate, 加这个 flag 才不跑 (一般不用)",
     )
+    parser.add_argument(
+        "--output", default="json", choices=["json", "text"],
+        help="V1.0.3 起可选, 默认 json (跟之前兼容); text 给人读, json 给 Agent pipe",
+    )
     args = parser.parse_args()
 
     # 校验 vault
@@ -509,7 +513,23 @@ def main() -> int:
         tags=tags,
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    # 输出
+    if args.output == "text":
+        # 人类可读: 关键字段一行总结
+        if result.get("type") == "ok":
+            print(
+                f"✅ 创建: {result.get('file_path', '?')}\n"
+                f"   priority: {result.get('priority', '?')} (via {result.get('source', '?')})\n"
+                f"   validate: exit {result.get('validate_exit', '?')}"
+            )
+        elif result.get("type") == "ask":
+            print(f"❓ {result.get('ask_message', '?')}")
+            for opt in result.get("ask_options", []):
+                print(f"   - {opt}")
+        else:  # error
+            print(f"❌ 错误: {result.get('message', '?')}")
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
 
     # 退出码
     if result.get("type") == "error":

@@ -20,14 +20,35 @@ set -euo pipefail
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
+
+# V1.0.3: 兼容两种跑法
+#   1) install.sh 在 skill 目录 (aweskill install 后的实际场景):
+#      $SCRIPT_DIR = ~/.aweskill/skills/obsidian-todo-track/
+#      scripts/config/plist 都在 SCRIPT_DIR 下
+#   2) install.sh 在仓库根 (开发调试场景, V1.0 旧假设):
+#      $SCRIPT_DIR = ~/Project/obsidian-personal-todo-tracker/
+#      scripts/config/plist 在 skills/obsidian-todo-track/ 下
+# 优先用 (1) 跑法, 找不到再回退 (2)
+if [[ -d "$SCRIPT_DIR/scripts" ]] && [[ -d "$SCRIPT_DIR/config" ]]; then
+    SKILL_DIR="$SCRIPT_DIR"
+    REPO_ROOT="$SCRIPT_DIR/.."
+elif [[ -d "$SCRIPT_DIR/skills/obsidian-todo-track/scripts" ]]; then
+    SKILL_DIR="$SCRIPT_DIR/skills/obsidian-todo-track"
+    REPO_ROOT="$SCRIPT_DIR"
+else
+    echo "❌ ERROR: 找不到 scripts/ 目录" >&2
+    echo "   试过: $SCRIPT_DIR/scripts (aweskill 装完后应该有)" >&2
+    echo "   试过: $SCRIPT_DIR/skills/obsidian-todo-track/scripts (仓库根跑应该这样)" >&2
+    echo "   请确认 install.sh 跑在 aweskill 装完的 skill 目录, 或仓库根" >&2
+    exit 1
+fi
 DEFAULT_VAULT="$HOME/Obsidian/todo"
 VAULT="${VAULT:-$DEFAULT_VAULT}"
 DRY_RUN=0
 FORCE=0
 
-# 要 cp 的文件 (相对 repo root)
-CONFIG_SRC="$REPO_ROOT/config/default_priorities.yaml"
+# 要 cp 的文件 (相对 skill 目录)
+CONFIG_SRC="$SKILL_DIR/config/default_priorities.yaml"
 
 # ============================================================
 # 参数解析
@@ -58,14 +79,19 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             cat <<'EOF'
-install.sh - 一键安装 obsidian-personal-todo-tracker (V1.0)
+install.sh - 一键安装 obsidian-personal-todo-tracker (V1.0.3)
 
 用法:
     bash install.sh --dry-run          打印将做什么, 不真改
     bash install.sh                    真装 (已存在文件会跳过并告警)
     bash install.sh --force            覆盖已存在文件
     bash install.sh --vault PATH       自定义 vault 路径
+    bash install.sh --install-plist    装 3 段 launchd plist + launchctl load
     bash install.sh -h                 显示帮助
+
+支持从两种位置跑:
+    1) skill 目录 (aweskill install 完后): ~/.aweskill/skills/obsidian-todo-track/
+    2) 仓库根 (开发调试): ~/Project/obsidian-personal-todo-tracker/
 
 环境变量:
     VAULT    等价于 --vault, 优先级: --vault > $VAULT > ~/Obsidian/todo
@@ -169,15 +195,16 @@ fi
 echo "=========================================="
 echo ""
 echo "Repo:        $REPO_ROOT"
+echo "Skill dir:   $SKILL_DIR"
 echo "Vault:       $VAULT"
 echo "Dry-run:     $DRY_RUN"
 echo "Force:       $FORCE"
 echo ""
 
-# 1. 校验 repo
-if [[ ! -d "$REPO_ROOT/scripts" ]]; then
-    err "scripts/ 目录不存在: $REPO_ROOT/scripts"
-    err "请确认 install.sh 在仓库根目录跑"
+# 步骤 0: 校验 repo 完整性 (SKILL_DIR 已在上面解析, 这里 sanity check)
+if [[ ! -d "$SKILL_DIR/scripts" ]]; then
+    err "scripts/ 目录不存在: $SKILL_DIR/scripts"
+    err "SKILL_DIR=$SKILL_DIR 解析异常, 这是 install.sh 内部 bug, 请报 issue"
     exit 1
 fi
 
@@ -186,7 +213,7 @@ if [[ ! -f "$CONFIG_SRC" ]]; then
     exit 1
 fi
 
-# 2. 创建 vault 目录
+# 步骤 1: 创建 vault 目录
 log "=== 步骤 1: 创建 vault 目录 ==="
 for dir in "${REQUIRED_DIRS[@]}"; do
     action_mkdir "$dir"
@@ -205,11 +232,11 @@ if [[ $cp_exit -eq 2 ]]; then
 fi
 echo ""
 
-# 4. (可选) 装 launchd plist 启用定时主动
+# 步骤 3: (可选) 装 launchd plist 启用定时主动
 if [[ $DRY_RUN -eq 1 ]]; then
     log "=== 步骤 3: 装 launchd plist (DRY-RUN, 不真装) ==="
-    if [[ -d "$REPO_ROOT/plist" ]]; then
-        for plist in "$REPO_ROOT/plist"/*.plist; do
+    if [[ -d "$SKILL_DIR/plist" ]]; then
+        for plist in "$SKILL_DIR/plist"/*.plist; do
             plist_name=$(basename "$plist")
             log "将 cp: $plist -> ~/Library/LaunchAgents/$plist_name"
             log "       然后 launchctl load ~/Library/LaunchAgents/$plist_name"
@@ -219,11 +246,11 @@ if [[ $DRY_RUN -eq 1 ]]; then
     log "(跳过 plist 装, 跑 'bash $0 --install-plist' 真装)"
 elif [[ "${INSTALL_PLIST:-0}" -eq 1 ]]; then
     log "=== 步骤 3: 装 launchd plist ==="
-    if [[ ! -d "$REPO_ROOT/plist" ]]; then
-        warn "plist 目录不存在: $REPO_ROOT/plist"
+    if [[ ! -d "$SKILL_DIR/plist" ]]; then
+        warn "plist 目录不存在: $SKILL_DIR/plist"
     else
         mkdir -p ~/Library/LaunchAgents
-        for plist in "$REPO_ROOT/plist"/*.plist; do
+        for plist in "$SKILL_DIR/plist"/*.plist; do
             plist_name=$(basename "$plist")
             dst=~/Library/LaunchAgents/$plist_name
             cp "$plist" "$dst"
@@ -253,13 +280,13 @@ echo "  2. 跟 Agent 说 '开始用 todo' 触发 Onboarding 7 步"
 echo "  3. 跟 Agent 说 '建个 todo 提醒我 X' 创建第一个 todo"
 echo ""
 echo "启用定时主动 (V1.0.2 新):"
-echo "  bash $REPO_ROOT/install.sh --install-plist   # 装 3 段 plist + launchctl load"
-echo "  launchctl list | grep com.todo.             # 验证 3 段都跑起来"
-echo "  tail -f /tmp/todo-daily-integrity.log       # 看每天 18:00 跑 daily_check"
+echo "  bash $0 --install-plist                # 装 3 段 plist + launchctl load (从哪跑都行)"
+echo "  launchctl list | grep com.todo.        # 验证 3 段都跑起来"
+echo "  tail -f /tmp/todo-daily-integrity.log  # 看每天 18:00 跑 daily_check"
 echo ""
 echo "验证安装:"
-echo "  python3 $REPO_ROOT/scripts/validate_todo.py --help"
-echo "  python3 $REPO_ROOT/scripts/daily_todo_check.py --vault $VAULT --list-only"
+echo "  python3 $SKILL_DIR/scripts/validate_todo.py --help"
+echo "  python3 $SKILL_DIR/scripts/daily_todo_check.py --vault $VAULT --list-only"
 echo ""
 echo "V1.0 不做的事 (V1.1+ 才加):"
 echo "  - 6 段 plist 模板 (V1.1 真交付, 学 finance track V1.3.4)"
