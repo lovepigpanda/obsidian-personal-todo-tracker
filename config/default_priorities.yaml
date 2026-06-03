@@ -1,0 +1,46 @@
+# Obsidian Todo Track - 默认优先级规则 (V1.0)
+#
+# 5 层优先级 (被 todo_create.py 按顺序匹配):
+#   1. user (用户在 note 里显式说 "P0"/"紧急"/"重要"/"有空")
+#   2. note_keywords (note 文本里的关键词)
+#   3. due_distance (距 due 多少天, 天数越短越优先)
+#   4. project_prefix (wikilink 关联到 work-/life-/...)
+#   5. fallback (P2, 标准默认)
+#
+# 学 finance track V1.3.3 config/default_accounts.yaml 模式:
+# - 5 层规则按数组顺序匹配, 第一个 hit 就用
+# - 跟 vault 端 ~/Obsidian/todo/default_priorities.yaml MD5 必须一致
+# - 修改后跑 md5 校验, 不一致 daily_todo_check 会软告警
+#
+# V1.0 parser 限制 (parse_simple_yaml, 零依赖):
+# - list 必须用内联 [a, b, c] 格式
+# - dict 数组必须用内联 {a: b, c: d} 格式
+# - 不支持嵌套 - 列表项 (V1.x 后续如果用 pyyaml 可解除)
+
+# === 第 1 层: user 显式声明 (Agent 直接读 note) ===
+# 这一层由 Agent 自己做, 不在 YAML 里. note 里出现 "P0" / "P1" / "P2" / "P3" 直接用
+
+# === 第 2 层: note 关键词 (中文 + 英文) ===
+# 第一个匹配 keyword 的 priority 用上
+note_keywords:
+  P0: [紧急, 立刻, 马上, asap, urgent, 立刻处理, 立刻修, 当天]
+  P1: [重要, 必须, 务必, 不能拖, important, critical, 尽快]
+  P3: [有空, 不急, 再说, 想到了再做, 顺便, whenever, 闲的时候]
+
+# === 第 3 层: due 距今天数 ===
+# 规则按 from_days asc 匹配, 第一个 hit 的 priority 用上
+# V1.0 拆成 4 个独立 key (V1.0 parser 不支持 list-of-dict 嵌套, V1.x 用 pyyaml)
+due_distance_P0: {from_days: 0, to_days: 0, priority: P0}
+due_distance_P1: {from_days: 1, to_days: 3, priority: P1}
+due_distance_P2: {from_days: 4, to_days: 7, priority: P2}
+due_distance_P3: {from_days: 8, to_days: 9999, priority: P3}
+
+# === 第 4 层: project 前缀 (wikilink 关联) ===
+# 没有 due 时, 按 project 类型给默认 priority
+# V1.0 拆 prefix / priority 为两个独立 list, 索引对齐
+#   prefix_rules[0] = "work-", prefix_priorities[0] = "P1"
+project_prefix_rules: [work-, finance-, health-, life-, learning-]
+project_prefix_priorities: [P1, P1, P1, P2, P3]
+
+# === 第 5 层: fallback (V1.0 默认 P2) ===
+fallback: P2
