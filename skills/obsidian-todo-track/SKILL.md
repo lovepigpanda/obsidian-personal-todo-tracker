@@ -53,7 +53,7 @@ triggers:
   - block
   - task
   - reminder
-version: V1.0.2
+version: V1.0.5
 # V1.0 = 最小可落地 (M1)
 #   交付: SKILL.md + install.sh + 3 个 stdlib 脚本 (validate_todo / todo_create / daily_todo_check)
 #         + 1 个每日巡检 (daily_todo_check) + 1 个默认优先级配置 (default_priorities.yaml)
@@ -63,6 +63,25 @@ version: V1.0.2
 #         daily_todo_check 增强 (BLOCKED >3 天 主动问)
 #         3 段 launchd plist 模板 (daily 18:00 / weekly 周日 20:00 / monthly 月末 21:00)
 #         install.sh --install-plist 真装 (学 finance V1.3.4 教训, 不只问要不要)
+# V1.0.3 = 路径 bug 修复 batch (Evan 测试发现 3 bug, 16/16 e2e 全过, 6 端 SHA256 一致)
+# V1.0.4 = 工作流教训沉淀: Evan 反馈"没确认状态就给方案"+"别把问题埋进选项表"
+#   新增: references/fact-check-before-recommendation.md (6 项核查模板 + 配套写作规则)
+#         SKILL.md § 注意事项 §9 (跨系统假设必须 fact-check)
+#         SKILL.md § 注意事项 §10 (别把问题埋进选项表)
+#   故意不做: fact-check 自动化脚本 (V1.1 再说; V1.0.4 仍由 agent 手动跑 6 项 + 写表)
+# V1.0.5 = done_helper.py 落地 (Evan 测试 2 笔标 done 暴露的 3 个 SKILL.md 错位)
+#   新增: scripts/done_helper.py (V1.1 计划提前交付)
+#         - --file 精确 / --match 模糊两种入口
+#         - 标 done 时自动: filename 前缀换完成日 / frontmatter due 跟 filename 对齐 (满足 validate 强校验)
+#         - 自动追加 completed_on / original_due 双日期字段 (保逾期历史)
+#         - 自动改 status / updated / 进度区追加 "完成" 行
+#         - 原子写 + 自动跑 validate_todo.py
+#   改 SKILL.md: § 步骤 2 引用 done_helper.py (不再让 Agent 手改 status + mv)
+#                § 步骤 4 命名规则澄清: filename 日期 = frontmatter due = **完成日** (不是 due 日)
+#                § 注意事项 §8 改写, 配合 §11 新增 completed_on / original_due 字段用法
+#                § V1.0.2 脚本清单 加 #7 done_helper.py
+#                § V1.x 后续要做的脚本 划掉 done_helper.py (V1.0.5 ✓)
+#   故意不做: snooze_helper / block_helper / cancel_helper (V1.1)
 # 故意不做: en 翻译 (V1.4) / Dataview 仪表盘 (V1.6) / project (multi-step) 支持 (明确不做)
 status: ACTIVE
 tags: [todo, obsidian, agent, productivity, task-tracking]
@@ -155,7 +174,7 @@ obsidian-personal-todo-tracker             ~/Obsidian/todo/
 
 | 类别 | V1.0.2 真实交付 | 故意不做（V1.x 后续） |
 |------|------------------|---------------------|
-| 脚本 | validate_todo / todo_create / daily_todo_check / weekly_summary / monthly_summary / push_alerts (6 个) | snooze_helper / done_helper / 等 |
+| 脚本 | validate_todo / todo_create / daily_todo_check / weekly_summary / monthly_summary / push_alerts / **done_helper (V1.0.5 新)** (7 个) | snooze_helper / block_helper / cancel_helper (V1.1) |
 | 文档 | zh SKILL.md + zh README.md | en SKILL / en README (V1.4) |
 | 模板 | 文件名规范（脚本生成） | 手写 .md 模板 |
 | 安装 | install.sh 一键 cp + dry-run + --install-plist | aweskill 自动（V1.5） |
@@ -295,7 +314,7 @@ default_remind_days: 3         # 距 due ≤ N 天 WARN
 | 触发词 | 意图 | 示例 |
 |--------|------|------|
 | 建个 todo / 做个 / 提醒我 | create | "建个 todo 提醒我 6/15 续签合同" |
-| 完成了 / done / 标完成 | done | "合同续签完了，标 done" |
+| 完成了 / done / 标完成 | done | "合同续签完了，标 done" | 调 `done_helper.py --match "合同续签"` (V1.0.5 起, 不再 Agent 手改 status + mv) |
 | 暂缓 / snooze / 推迟到下周 | snooze | "续签这个推到下周" |
 | 阻塞 / block / 卡住了 | block | "续签被 HR 部门卡住了，标 block" |
 | 取消 / cancel / 不用了 | cancel | "续签不用了" |
@@ -358,14 +377,18 @@ python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scri
 ### 步骤 4：生成文件名
 
 ```
-{date}-{slug}-{priority}-{STATUS}.md
+{完成日或原 due}-{slug}-{priority}-{STATUS}.md
 ```
 
 slug = title 的连字符小写版本（中文保留，英文 lowercase）。
 
-示例：
-- `ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md`
-- `DONE/2026-06-10-renew-contract-P1-DONE.md`
+**重要 (V1.0.5 澄清)**:
+- 对 **ACTIVE/ SNOOZED/ BLOCKED/ CANCELED/** 文件:`{日期}` = frontmatter `due` (V1.0.2 起的硬约束, `validate_todo.py` 强校验 filename 日期 = frontmatter due)
+- 对 **DONE/** 文件:`{日期}` = frontmatter `due` = **完成日** (不是原 due),`done_helper.py` 标 done 时自动 rename 改 frontmatter. 原 due 留 `original_due` 字段(详见 §11)
+
+示例:
+- `ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md` (新建, due=2026-06-15)
+- `DONE/2026-06-10-renew-contract-P1-DONE.md` (完成日 6-10, due 已同步为 6-10, 原 due 6-15 在 `original_due: 2026-06-15` 字段)
 
 ### 步骤 5：创建文件
 
@@ -451,18 +474,18 @@ python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scri
 7. 调 validate_todo.py → 退出 0
 8. 写文件：`~/Obsidian/todo/ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md`
 
-### 示例 2：标 done
+### 示例 2：标 done (V1.0.5 起, 走 done_helper.py)
 
 **用户输入：**
 > "续签合同完了"
 
-**AI Agent 执行**：
-1. 搜 ACTIVE/ 找 "续签合同" 匹配的 .md
-2. 找到 `ACTIVE/2026-06-15-renew-contract-P1-ACTIVE.md`
-3. 改 status: DONE, updated: 今天
-4. `git mv` (or os.rename) 到 `DONE/` 目录
-5. 调 validate_todo.py → 退出 0
-6. 告诉用户"已标 done，移到 DONE/"
+**AI Agent 执行**:
+1. 调 `done_helper.py --vault ~/Obsidian/todo --match "续签合同"`
+2. `done_helper.py` 内部: 解析 ACTIVE/ 匹配文件 → 改 `status: DONE` / `updated: 今天` / `due: 今天` (filename 对齐) / 追加 `completed_on` + `original_due` / 进度区加 "完成" 行 → 原子写 → rename 到 DONE/ → 跑 validate_todo.py
+3. 看到 `validate_exit: 0` → 告诉用户"已标 done, 移到 DONE/2026-06-12-renew-contract-P1-DONE.md"
+
+**⚠️ V1.0.5 前 (V1.0.2 ~ V1.0.4) 的旧做法已废弃**:
+> Agent 手动: 改 status=DONE → os.rename 到 DONE/ → 跑 validate. 手工改易踩 3 个坑 (中文 slug split / 进度区追加位置 / filename-due 对齐), 已被 done_helper.py 替代. 看到旧 SKILL.md / V1.0.4 引用的 agent 走老路, 立刻提示它用 helper.
 
 ### 示例 3：snooze
 
@@ -501,6 +524,7 @@ python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scri
 | 4 | `weekly_summary.py` | 本周复盘（新建/完成/净增/状态分布/priority 分布） | launchd 每周日 20:00 |
 | 5 | `monthly_summary.py` | 月度报告（完成率/平均完成时间/滞销清单） | launchd 每月 28 号 21:00（脚本内判月末, 不是月末静默 skip） |
 | 6 | `push_alerts.py` | 推送 alerts 摘要到 macOS 桌面通知（wecom/feishu/dingtalk webhook 配 `~/.obsidian-todo/push_config.json`） | daily/weekly/monthly 跑完后 Agent 调一次 |
+| 7 | `done_helper.py` (V1.0.5 新) | 标 done 入口（--file 精确 / --match 模糊） | Agent 解析完"完成/标 done"后调，自动 rename / 改 frontmatter / 写 completed_on+original_due / 跑 validate |
 
 **3 段 plist 模板** (`plist/com.todo.*.plist`)：
 
@@ -516,8 +540,9 @@ python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scri
 
 | 计划版本 | 脚本/能力 | 备注 |
 |---------|-----------|------|
-| V1.1 | snooze_helper.py / done_helper.py | done / snooze / block / cancel 走显式脚本而非 Agent 改文件 |
-| V1.1 | snooze / done / block / cancel Agent 显式 helper | V1.0.2 暂时 Agent 直接改 status + mv 文件 |
+| V1.1 | snooze_helper.py / block_helper.py / cancel_helper.py | ~~done_helper.py~~ → V1.0.5 已交付 ✓; V1.1 继续做 snooze / block / cancel |
+| V1.1 | snooze / block / cancel Agent 显式 helper | ~~done~~ → V1.0.5 已交付 ✓ |
+| V1.1 | daily_integrity_check 读 `completed_on` / `original_due` 做"逾期完成率"统计 | 跟 §11 配套 |
 | V1.4 | en 翻译 | 双语 (学 finance V1.3.2) |
 | V1.5 | Dataview 仪表盘模板 | 用户在 Obsidian 里看 |
 
@@ -532,6 +557,16 @@ python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scri
 5. **必跑校验**：写完每笔后立即 validate_todo.py（Agent 责任，不依赖用户配置）
 6. **配对 ID**：V1.0 不支持 dependency / parent-child（V1.2 加）
 7. **学习机制**：ask_on_2nd，第一次静默第二次问（同 finance track V1.3.3）
+8. **filename 日期 = frontmatter due (validate_todo.py 强校验)** —— V1.0.5 完整规则:
+   - **ACTIVE/ SNOOZED/ BLOCKED/ CANCELED/** 文件:`{日期}` = due (todo_create.py 写入时已对齐)
+   - **DONE/** 文件:`{日期}` = due = **完成日** (不是原 due).`done_helper.py` 标 done 时自动: (a) filename 前缀换完成日 (b) frontmatter `due` 同步改成完成日 (这样 validator 不会因"filename ≠ due"报红) (c) 原 due 移到 `original_due` 字段 (d) 新增 `completed_on` 字段. **Agent 不要手改 frontmatter + os.rename, 必跑 `done_helper.py`** (手改易踩坑: 中文 slug split / 进度区追加位置 / filename-due 对齐, 详见 V1.0.5 教训)
+9. **跨系统假设必须 fact-check 后再给方案** — todo note 涉及跨 skill / 跨 vault / 外部系统状态时, **先建 `confirm-<目标>-real-state` 前置 todo 把 6 项核查完**, 再给实施建议。Evan 反馈"那你确认过finance项目目前的状态吗?"= 一次打脸,不能基于未验证假设给"4 步升级方案"。详见 `references/fact-check-before-recommendation.md`
+10. **别把问题埋进选项表** — 给 Evan 总结 todo 状态时, **先一句话直说问题** (≤ 30 字), 再摆事实表格, 最后才放 A/B/C 选项。Evan 反馈"没看懂现在的问题"= 我把 P1 没闭环埋在了 4 段 todo 改名理由 + A/B/C 决策表里。详见 `references/fact-check-before-recommendation.md` § 配套规则
+11. **DONE/ 文件的 `completed_on` + `original_due` 双日期字段 (V1.0.5 起, 必带)**:
+    - `completed_on`: 完成日 (`done_helper.py` 写入, 默认今天, 可 `--completed-on` 覆盖)
+    - `original_due`: 标 done 前的原 due (保逾期历史, e.g. 实际 6-12 完成 + 原 due 6-9 → 逾期 3 天的"账"才能查)
+    - 这俩字段**只在 DONE/ 文件**出现, ACTIVE/ 不需要
+    - `daily_integrity_check.py` V1.x 后续会读这俩字段做"逾期完成率"统计 (V1.1)
 
 ---
 
@@ -587,6 +622,56 @@ EOF
 
 ---
 
-> Skill: obsidian-todo-track | Version: V1.0.2 (主动能力全面交付, 跟 finance V1.3.4 齐平) | For AI Agent use
+> Skill: obsidian-todo-track | Version: V1.0.5 (done_helper.py 落地 + 命名规则澄清 + §11 双日期字段) | For AI Agent use
 > Project: https://github.com/lovepigpanda/obsidian-personal-todo-tracker
 > 后续 V1.1+ roadmap 见「V1.x 后续要做的脚本」表格
+
+## 🧪 V1.0.5 新增: done_helper.py 自测 (怎么测不要踩我踩过的坑)
+
+**踩坑记录 (Evan 6-12 真实跑出来)**: 我第一次测 done_helper 时**直接拿 ACTIVE/ 真文件当测试数据**, 跑通后才发现 = 擅自给 Evan 标了一个他没说完成的事故. **正确做法: 用 /tmp 临时 vault 跑通再释放**.
+
+**自测步骤** (Agent 调 done_helper 前先跑这个, 确认 OK 再动真 vault):
+
+```bash
+# 1. 准备临时 vault
+TMPV=/tmp/done_helper_test
+rm -rf $TMPV && mkdir -p $TMPV/{ACTIVE,DONE,BLOCKED,SNOOZED,CANCELED}
+# 写一个测试 ACTIVE/ 文件
+cat > $TMPV/ACTIVE/2026-06-09-测试-P0-ACTIVE.md <<'EOF'
+---
+type: todo
+title: 测试
+created: 2026-06-05
+updated: 2026-06-05
+status: ACTIVE
+priority: P0
+due: 2026-06-09
+project:
+tags: [todo]
+source: user
+note: 自测用
+---
+
+# 测试
+
+## 验收
+- [ ]
+
+## 进度
+- 2026-06-05 创建
+EOF
+
+# 2. 跑 done_helper (临时 vault 不会污染真 vault)
+python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/done_helper.py \
+  --vault $TMPV --file "ACTIVE/2026-06-09-测试-P0-ACTIVE.md" --completed-on 2026-06-12
+
+# 3. 验证
+ls $TMPV/DONE/  # 应该有 2026-06-09-测试-P0-DONE.md (slug 保留 + status 换 DONE + 日期换完成日)
+python3 ~/Project/obsidian-personal-todo-tracker/skills/obsidian-todo-track/scripts/validate_todo.py \
+  $TMPV/DONE/2026-06-09-测试-P0-DONE.md  # 应该 0 errors
+
+# 4. 清理
+rm -rf $TMPV
+```
+
+**铁律**: 写新 helper / 改 frontmatter schema 时, **永远先 /tmp 自测**, 不要拿真 vault 试错. 学 Evan 6-12 那次事故, 真 vault 错动一笔 = 至少 1 轮 rollback 才能恢复.
